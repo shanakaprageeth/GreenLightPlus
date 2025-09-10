@@ -1,0 +1,11 @@
+numpy
+pandas
+scipy
+gymnasium
+openstudio==3.6.1
+gdown
+ray[rllib]
+matplotlib
+pytest
+sphinx
+sphinx-rtd-theme
