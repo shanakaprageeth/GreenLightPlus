@@ -56,13 +56,15 @@ init_state = {
 # Run the model based on growth cycle and time interval
 print("start simulation")
 for current_step in range(int(season_length // season_interval)):
-    print(f'running step {current_step}')
     # Run the model and get results
     gl = model.run_model(gl_params=init_state, season_length=season_length,
                          season_interval=season_interval, step=current_step)
     init_state = gl
     dmc = 0.06  # Dry matter content
-
+    print(f'running step {current_step}')
+    print(f'Green house state {gl}')
+    # TODO output MQTT states here
+    # TODO read MQTT phy states here and update the model greenlightadv_shanaka/create_light_model/
     # Calculate and print current yield (kg/m2)
     current_yield = 1e-6 * calculate_energy_consumption(gl, 'mcFruitHar') / dmc
     print(f"Current yield: {current_yield:.2f} kg/m2")
