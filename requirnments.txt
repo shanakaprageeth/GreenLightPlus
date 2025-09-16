@@ -9,3 +9,4 @@ matplotlib
 pytest
 sphinx
 sphinx-rtd-theme
+paho-mqtt

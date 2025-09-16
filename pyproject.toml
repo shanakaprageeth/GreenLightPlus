@@ -32,6 +32,7 @@ dependencies = [
     "gdown",
     "ray[rllib]",
     "matplotlib",
+    "paho-mqtt",
 ]
 
 [project.optional-dependencies]
