@@ -33,6 +33,7 @@ dependencies = [
     "ray[rllib]",
     "matplotlib",
     "paho-mqtt",
+    "PyYAML",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +50,7 @@ Source = "https://github.com/shanakaprageeth/GreenLightPlus"
 
 [project.scripts]
 greenlightadv = "greenlightadv_shanaka.cli:main"
+greenlight-sim = "greenlightadv_shanaka.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/greenlightadv_shanaka"]
