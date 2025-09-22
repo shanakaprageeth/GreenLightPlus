@@ -27,6 +27,9 @@ from .core.greenhouse_geometry import GreenhouseGeometry
 from .core.greenlight_energyplus_simulation import GreenhouseSimulation
 from .core.green_light_model import GreenLightModel
 
+# MQTT integration components
+from .mqtt import MQTTPublisher, MQTTSubscriber, TopicManager, MQTTSimulationManager
+
 # Analysis and visualization tools
 from .result_analysis.plot_green_light import plot_green_light
 from .result_analysis.energy_yield_analysis import energy_yield_analysis
