@@ -63,7 +63,7 @@ jobs:
         # Verify config file was created
         test -f /tmp/test_config.json
         
-        # Test simulation with minimal config (disable plotting and MQTT)
+        # Test simulation with minimal config (disable plotting and MQTT, no weather data)
         python -c "
 import json
 config = {

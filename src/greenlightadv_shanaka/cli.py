@@ -11,14 +11,6 @@ import sys
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
-
-from greenlightadv_shanaka import (
-    GreenLightModel,
-    extract_last_value_from_nested_dict,
-    calculate_energy_consumption,
-    plot_green_light,
-    MQTTSimulationManager,
-)
 import logging
 
 
@@ -83,7 +75,7 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
             "season_length": 10,
             "season_interval": 1/24/4,  # 15 minutes
             "first_day": 91,
-            "epw_path": "test_data/JPN_Tokyo.Hyakuri.477150_IWEC.epw"
+            "epw_path": None  # No default weather data - will use artificial weather
         },
         "mqtt": {
             "enable": True,
@@ -151,8 +143,8 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if not (1 <= sim_config["first_day"] <= 365):
         raise ValueError("first_day must be between 1 and 365")
     
-    # Validate file paths
-    epw_path = sim_config["epw_path"]
+    # Validate file paths - epw_path is optional
+    epw_path = sim_config.get("epw_path")
     if epw_path and not Path(epw_path).exists():
         logging.warning(f"Weather file not found: {epw_path}. Will use artificial weather data.")
     
@@ -170,6 +162,15 @@ def run_simulation(config: Dict[str, Any]) -> None:
     Args:
         config: Validated configuration dictionary
     """
+    # Import heavy dependencies only when simulation is actually needed
+    from greenlightadv_shanaka import (
+        GreenLightModel,
+        extract_last_value_from_nested_dict,
+        calculate_energy_consumption,
+        plot_green_light,
+        MQTTSimulationManager,
+    )
+    
     sim_config = config["simulation"]
     mqtt_config = config["mqtt"]
     model_config = config["model"]
@@ -187,7 +188,7 @@ def run_simulation(config: Dict[str, Any]) -> None:
     model = GreenLightModel(
         first_day=sim_config["first_day"],
         isMature=model_config["is_mature"],
-        epw_path=sim_config["epw_path"],
+        epw_path=sim_config.get("epw_path"),  # Optional weather data
         lampType=model_config["lamp_type"]
     )
     
@@ -306,8 +307,8 @@ def create_sample_config(output_path: str) -> None:
         "simulation": {
             "season_length": 10,
             "season_interval": 0.010417,  # 15 minutes as fraction of day
-            "first_day": 91,
-            "epw_path": "test_data/JPN_Tokyo.Hyakuri.477150_IWEC.epw"
+            "first_day": 91
+            # epw_path is optional - omit to use artificial weather data
         },
         "mqtt": {
             "enable": True,

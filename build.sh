@@ -43,8 +43,7 @@ cat > /tmp/minimal_system_test.json << EOF
   "simulation": {
     "season_length": 0.5,
     "season_interval": 0.125,
-    "first_day": 91,
-    "epw_path": "test_data/JPN_Tokyo.Hyakuri.477150_IWEC.epw"
+    "first_day": 91
   },
   "mqtt": {
     "enable": false

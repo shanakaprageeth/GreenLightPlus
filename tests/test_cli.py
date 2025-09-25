@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+# Import CLI functions directly to avoid heavy dependencies
+import sys
+sys.path.insert(0, 'src')
 from greenlightadv_shanaka.cli import (
     load_config,
     validate_config,
@@ -160,6 +163,15 @@ class TestConfigValidation:
             # Should not raise error but log warning
             mock_logging.warning.assert_called_once()
             assert "Weather file not found" in mock_logging.warning.call_args[0][0]
+    
+    def test_validate_no_epw_file(self):
+        """Test validation works without EPW file (uses artificial weather)."""
+        config = {"simulation": {"epw_path": None}}
+        
+        validated = validate_config(config)
+        
+        # Should work fine without weather file
+        assert validated["simulation"]["epw_path"] is None
 
 
 class TestSampleConfigCreation:
