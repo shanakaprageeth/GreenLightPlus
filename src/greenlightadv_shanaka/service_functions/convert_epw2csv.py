@@ -235,6 +235,8 @@ def preprocess_epw_data(epw_data: pd.DataFrame) -> pd.DataFrame:
     """
     Preprocess weather data from an EPW file, including handling time columns and formatting.
 
+    Supports both standard and comma-separated date/time formats (e.g., 1983,1,4,23,60).
+
     This function performs the following operations:
     1. Converts '60' minutes to '0'.
     2. Creates a 'DateTime' column from separate date and time columns.
@@ -253,28 +255,44 @@ def preprocess_epw_data(epw_data: pd.DataFrame) -> pd.DataFrame:
     epw_data["Minute"] = epw_data["Minute"].astype(str).replace("60", "0")
 
     # Step 2: Create 'DateTime' column by combining 'Year', 'Month', 'Day', 'Hour', 'Minute'
-    epw_data["DateTime"] = (
-        epw_data["Year"].astype(str) + "-"
-        + epw_data["Month"].astype(str).str.zfill(2) + "-"
-        + epw_data["Day"].astype(str).str.zfill(2) + " "
-        + epw_data["Hour"].astype(str).str.zfill(2) + ":"
-        + epw_data["Minute"].astype(str).str.zfill(2)
-    )
+    # Handle both string and numeric columns
+    def make_datetime(row):
+        try:
+            year = int(row["Year"])
+            month = int(row["Month"])
+            day = int(row["Day"])
+            hour = int(row["Hour"])
+            minute = int(row["Minute"])
+            # EPW convention: hour 24 means midnight of next day
+            if hour == 24:
+                dt = datetime(year, month, day) + timedelta(days=1)
+                hour = 0
+            else:
+                dt = datetime(year, month, day)
+            return dt.replace(hour=hour, minute=minute)
+        except Exception:
+            # fallback to string concatenation
+            return f"{row['Year']}-{str(row['Month']).zfill(2)}-{str(row['Day']).zfill(2)} {str(row['Hour']).zfill(2)}:{str(row['Minute']).zfill(2)}"
+
+    epw_data["DateTime"] = epw_data.apply(make_datetime, axis=1)
 
     # Step 3: Remove individual date and time columns
     date_time_columns: List[str] = ["Year", "Month", "Day", "Hour", "Minute"]
     epw_data = epw_data.drop(columns=date_time_columns)
 
     # Step 4: Reorder columns to put 'DateTime' first
-    columns: List[str] = ["DateTime"] + \
-        [col for col in epw_data.columns if col != "DateTime"]
+    columns: List[str] = ["DateTime"] + [col for col in epw_data.columns if col != "DateTime"]
     epw_data = epw_data.reindex(columns=columns)
 
-    # Step 5: Correct any '24:00' time to '00:00' of the next day
-    epw_data["DateTime"] = epw_data["DateTime"].apply(correct_hour_24)
+    # Step 5: Convert 'DateTime' to pandas datetime type if not already
+    if not pd.api.types.is_datetime64_any_dtype(epw_data["DateTime"]):
+        epw_data["DateTime"] = pd.to_datetime(epw_data["DateTime"], errors="coerce")
 
-    # Step 6: Convert 'DateTime' to pandas datetime type
-    epw_data["DateTime"] = pd.to_datetime(epw_data["DateTime"])
+    # Step 6: Correct any '24:00' time to '00:00' of the next day (legacy support)
+    epw_data["DateTime"] = epw_data["DateTime"].apply(
+        lambda x: correct_hour_24(x.strftime("%Y-%m-%d %H:%M")) if pd.notnull(x) else x
+    )
+    epw_data["DateTime"] = pd.to_datetime(epw_data["DateTime"], errors="coerce")
 
     return epw_data
 
@@ -423,7 +441,7 @@ def combine_all_data(epw_data: pd.DataFrame, vaporDens: np.ndarray, co2: np.ndar
 
 def interpolate_to_hires(startTime: pd.Timestamp, data: pd.DataFrame, epw_data: pd.DataFrame, interval: int = 300) -> pd.DataFrame:
     """
-    Interpolate data from 1-hour interval to a specified interval using pchip interpolation.
+    Interpolate only numeric columns from 1-hour interval to a specified interval using pchip interpolation.
 
     Args:
         startTime (pd.Timestamp): The start time of the data.
@@ -446,14 +464,18 @@ def interpolate_to_hires(startTime: pd.Timestamp, data: pd.DataFrame, epw_data: 
     # Generate new datetime values based on the specified interval
     new_datetimes = [
         startTime + pd.Timedelta(seconds=int(s)) for s in new_time_diff_seconds]
-
-    # Create a new DataFrame to store the interpolated data at the specified interval
     hires_data = pd.DataFrame({"DateTime": new_datetimes})
 
-    # Interpolate each column in the data DataFrame using pchip interpolation
+    # Interpolate only columns that can be converted to float
     for column in data.columns[1:]:
-        hires_data[column] = pchip_interpolate(
-            time_diff_seconds, data[column].values, new_time_diff_seconds)
+        try:
+            # Try converting to float
+            col_values = data[column].astype(float).values
+            hires_data[column] = pchip_interpolate(
+                time_diff_seconds, col_values, new_time_diff_seconds)
+        except Exception:
+            # Skip non-numeric columns
+            continue
 
     return hires_data
 
@@ -571,13 +593,52 @@ def check_csv(csv_path: str, timestep: int = None, output_folder: str = "data/en
         str: The path to the processed CSV file.
     """
     
+    # Convert file to UTF-8 if needed and write back to original file
+    with open(csv_path, 'rb') as f:
+        content = f.read()
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        text = content.decode('latin1')
+        with open(csv_path, 'w', encoding='utf-8') as f_out:
+            f_out.write(text)
+        print(f"File {csv_path} converted to UTF-8 encoding.")
+
     # Read the CSV file into a DataFrame
     df = pd.read_csv(csv_path)
     
-    # Check if the DateTime column exists in the DataFrame
+    datetime_corrected = False
+    # If DateTime column is not found, try to construct it from Date/Time columns
     if 'DateTime' not in df.columns:
-        raise ValueError("The DateTime column is not found in the CSV file.")
-    
+        if 'Date' in df.columns and ('Time' in df.columns or 'HH:MM' in df.columns):
+            time_col = 'Time' if 'Time' in df.columns else 'HH:MM'
+            df['DateTime'] = df['Date'].astype(str) + ' ' + df[time_col].astype(str)
+            df.drop(columns=['Date'], inplace=True)
+            df.drop(columns=['HH:MM'], inplace=True)
+            datetime_corrected = True
+        elif 'Date' in df.columns:
+            df['DateTime'] = df['Date'].astype(str)
+            datetime_corrected = True
+        else:
+            raise ValueError("No DateTime, Date, or Time columns found in the CSV file.")
+
+    # Fix 24:00 to 00:00 of next day
+    def fix_24_hour(dt_str):
+        if "24:00" in dt_str:
+            date_part = dt_str.split(" ")[0]
+            try:
+                date_obj = pd.to_datetime(date_part)
+                corrected_date = date_obj + pd.DateOffset(days=1)
+                return corrected_date.strftime("%Y/%m/%d 00:00")
+            except Exception:
+                return dt_str.replace("24:00", "00:00")
+        return dt_str
+
+    # Apply fix and mark as corrected if any changes
+    old_datetime = df['DateTime'].copy()
+    df['DateTime'] = df['DateTime'].astype(str).apply(fix_24_hour)
+    if not old_datetime.equals(df['DateTime']):
+        datetime_corrected = True
     # Check if the first value in the DateTime column is already in MATLAB's datenum format
     first_datetime = df['DateTime'].iloc[0]
     try:
@@ -592,14 +653,17 @@ def check_csv(csv_path: str, timestep: int = None, output_folder: str = "data/en
         # Try to parse the DateTime column to the standard date-time format 'YYYY-MM-DD HH:MM:SS'
         try:
             df['DateTime'] = pd.to_datetime(df['DateTime'])
-            # Format the DateTime column to 'YYYY-MM-DD HH:MM:SS'
             df['DateTime'] = df['DateTime'].dt.strftime('%Y-%m-%d %H:%M:%S')
         except ValueError as e:
-            raise ValueError(f"Failed to parse the DateTime column: {e}")
-        
-        # Convert the DateTime column to MATLAB's datenum format
+            print(f"Failed to parse the DateTime column: {e}")
+            print("You might want to check for 24:00 hour values and convert them to 00:00 of the next day.")
+            raise
         df['DateTime'] = df['DateTime'].apply(lambda x: datestr_to_matlab_datenum(pd.to_datetime(x)))
-    
+
+    if datetime_corrected:
+        print(f"DateTime column corrected and saved to: {csv_path}")
+        df.to_csv(csv_path, index=False)
+
     # If a timestep is specified, perform data interpolation
     if timestep is not None:
         print(f"Interpolating data to {timestep} minutes interval...")
@@ -614,8 +678,6 @@ def check_csv(csv_path: str, timestep: int = None, output_folder: str = "data/en
     
     # Save the processed DataFrame to the specified output path
     df.to_csv(output_path, index=False)
-    
- 
     
     # Return the path to the processed file
     return output_path

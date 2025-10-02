@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "greenlightadv"
+name = "greenlightadv_shanaka"
 version = "2.5"
 description = "Greenhouse Simulation and Optimization Toolkit"
 readme = "README.md"

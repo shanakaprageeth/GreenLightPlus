@@ -9,8 +9,18 @@ import json
 import yaml
 import sys
 import os
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+from greenlightadv_shanaka import (
+    GreenLightModel,
+    extract_last_value_from_nested_dict,
+    calculate_energy_consumption,
+    plot_green_light,
+    MQTTSimulationManager,
+    convert_epw2csv
+)
 import logging
 
 
@@ -56,6 +66,20 @@ def load_config(config_path: str) -> Dict[str, Any]:
         raise ValueError(f"Invalid configuration file format: {e}")
 
 
+def convert_epw_to_csv(epw_path: str, time_step: int) -> str:
+    """
+    Convert EPW file to CSV format using convert_epw2csv function and return CSV path.
+    Args:
+        epw_path: Path to EPW file
+        time_step: Simulation time step in minutes
+    Returns:
+        Path to generated CSV file
+    """
+    # Use default out_folder as in the function signature
+    csv_path = convert_epw2csv(epw_path, time_step)
+    return csv_path
+
+
 def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validate and normalize configuration.
@@ -75,7 +99,7 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
             "season_length": 10,
             "season_interval": 1/24/4,  # 15 minutes
             "first_day": 91,
-            "epw_path": None  # No default weather data - will use artificial weather
+            "csv_path": "test_data/JPN_Tokyo.Hyakuri.477150_IWEC.csv"
         },
         "mqtt": {
             "enable": True,
@@ -136,6 +160,12 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     
     # Validate critical parameters
     sim_config = validated_config["simulation"]
+    # Ensure epw_path and csv_path keys exist for all configs
+    epw_path = sim_config.get("epw_path", None)
+    csv_path = sim_config.get("csv_path", None)
+    sim_config["epw_path"] = epw_path
+    sim_config["csv_path"] = csv_path
+
     if sim_config["season_length"] <= 0:
         raise ValueError("season_length must be positive")
     if sim_config["season_interval"] <= 0:
@@ -143,10 +173,11 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if not (1 <= sim_config["first_day"] <= 365):
         raise ValueError("first_day must be between 1 and 365")
     
-    # Validate file paths - epw_path is optional
-    epw_path = sim_config.get("epw_path")
+    # Validate file paths
     if epw_path and not Path(epw_path).exists():
         logging.warning(f"Weather file not found: {epw_path}. Will use artificial weather data.")
+    if csv_path and not Path(csv_path).exists():
+        logging.warning(f"CSV weather file not found: {csv_path}. Will use artificial weather data.")
     
     mqtt_config = validated_config["mqtt"]
     if not (1 <= mqtt_config["broker_port"] <= 65535):
@@ -176,19 +207,36 @@ def run_simulation(config: Dict[str, Any]) -> None:
     model_config = config["model"]
     greenhouse_config = config["greenhouse"]
     output_config = config["output"]
-    
+
     setup_logging(output_config["log_level"])
     logger = logging.getLogger(__name__)
-    
+
     # Calculate time step in seconds
     time_step_seconds = sim_config["season_interval"] * 24 * 3600
-    
+
+    # Convert EPW to CSV if epw_path is provided and exists
+    epw_path = sim_config.get("epw_path")
+    csv_path = sim_config.get("csv_path")
+    weather_path = None
+    if epw_path and Path(epw_path).exists():
+        # Convert and use new CSV path
+        season_interval = sim_config.get("season_interval", 1/24/4)
+        time_step_minutes = int(season_interval * 24 * 60)
+        new_csv_path = convert_epw2csv(epw_path, time_step_minutes)
+        sim_config["csv_path"] = new_csv_path
+        weather_path = new_csv_path
+        logger.info(f"EPW file converted to CSV: {new_csv_path}")
+    elif csv_path and Path(csv_path).exists():
+        weather_path = csv_path
+    else:
+        weather_path = epw_path  # fallback, may be None
+
     # Create GreenLight model instance
     logger.info("Initializing GreenLight model...")
     model = GreenLightModel(
         first_day=sim_config["first_day"],
         isMature=model_config["is_mature"],
-        epw_path=sim_config.get("epw_path"),  # Optional weather data
+        csv_path=weather_path,
         lampType=model_config["lamp_type"]
     )
     
@@ -307,8 +355,8 @@ def create_sample_config(output_path: str) -> None:
         "simulation": {
             "season_length": 10,
             "season_interval": 0.010417,  # 15 minutes as fraction of day
-            "first_day": 91
-            # epw_path is optional - omit to use artificial weather data
+            "first_day": 91,
+            "cav_path": "test_data/JPN_Tokyo.Hyakuri.477150_IWEC.csv"
         },
         "mqtt": {
             "enable": True,
@@ -364,6 +412,22 @@ def create_sample_config(output_path: str) -> None:
     
     print(f"Sample configuration created: {output_path}")
 
+
+def find_encoding_error_line(filepath):
+    """
+    Find the line in a file that causes a UnicodeDecodeError.
+    Prints the line number and content that fails decoding.
+    """
+    with open(filepath, "rb") as f:
+        for i, line in enumerate(f, 1):
+            try:
+                line.decode("utf-8")
+            except UnicodeDecodeError as e:
+                print(f"Encoding error at line {i}: {e}")
+                print(f"Raw bytes: {line}")
+                return i
+    print("No encoding errors found.")
+    return None
 
 def main() -> None:
     """Main entry point for the CLI."""

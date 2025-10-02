@@ -6,8 +6,8 @@ source .venv/bin/activate
 # Uninstall old version if exists
 echo "Uninstalling old greenlightadv_shanaka if present..."
 pip3 uninstall -y GreenLightPlus || true
-pip3 uninstall -y greenlightadv || true
-
+pip3 uninstall -y greenlightadv_shanaka || true
+rm -rf dist/
 # Build the package
 python3 -m pip install --upgrade build
 python3 -m pip install -r requirnments.txt
@@ -43,7 +43,8 @@ cat > /tmp/minimal_system_test.json << EOF
   "simulation": {
     "season_length": 0.5,
     "season_interval": 0.125,
-    "first_day": 91
+    "first_day": 91,
+    "csv_path": "test_data/JPN_Tokyo.Hyakuri.477150_IWEC.csv"
   },
   "mqtt": {
     "enable": false
