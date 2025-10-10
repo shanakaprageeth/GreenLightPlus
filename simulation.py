@@ -6,6 +6,7 @@ from greenlightadv_shanaka import (
     MQTTSimulationManager,
 )
 import logging
+import matplotlib.pyplot as plt
 
 # Set up logging
 logging.basicConfig(
@@ -14,7 +15,7 @@ logging.basicConfig(
 )
 
 # Set simulation parameters
-season_length = 10  # Length of growth cycle (days), can be set as a fraction
+season_length = 20  # Length of growth cycle (days), can be set as a fraction
 season_interval = 1/24/4  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
 first_day = 91  # First day of the growth cycle (day of the year)
 
@@ -92,6 +93,9 @@ if enable_mqtt:
         print(f"Error initializing MQTT manager: {e}")
         mqtt_manager = None
 
+# Track simulation states for plotting
+states_history = []
+
 # Run the model based on growth cycle and time interval
 print("start simulation")
 try:
@@ -104,6 +108,10 @@ try:
         gl = model.run_model(gl_params=init_state, season_length=season_length,
                              season_interval=season_interval, step=current_step)
         init_state = gl
+
+        # Track state for plotting
+        states_history.append(gl.copy() if hasattr(gl, 'copy') else gl)
+
         dmc = 0.06  # Dry matter content
         print(f'running step {current_step}')
         
@@ -146,4 +154,38 @@ print(f"Heating energy consumption: {boilIn:.2f} MJ/m2")
 print(f"Energy consumption per unit: {(lampIn + boilIn)/total_yield:.2f} MJ/kg")
 
 # Plot model results
-plot_green_light(gl)
+plot_green_light(gl, filename="sim_plot.png")
+
+# Plot tracked simulation states (example: plot a variable over time)
+def plot_simulation_history(states_history, variable='p__tAir', filename=None):
+    """
+    Plot a variable from the tracked simulation states.
+    variable: str, e.g. 'p__tAir' for air temperature in the greenhouse.
+    If filename is provided, save the plot to file instead of showing it.
+    """
+    values = []
+    for state in states_history:
+        # Support nested dicts with double underscore notation
+        keys = variable.split('__')
+        val = state
+        try:
+            for k in keys:
+                val = val[k]
+            values.append(val)
+        except Exception:
+            values.append(float('nan'))
+    plt.figure()
+    plt.plot(values)
+    plt.title(f"Simulation history: {variable}")
+    plt.xlabel("Step")
+    plt.ylabel(variable)
+    plt.grid(True)
+    if filename:
+        plt.savefig(filename)
+        print(f"Plot saved to {filename}")
+        plt.close()
+    else:
+        plt.show()
+
+# Example: plot air temperature if available, and save to file
+plot_simulation_history(states_history, variable='p__tAir', filename="simulation_p__tAir.png")

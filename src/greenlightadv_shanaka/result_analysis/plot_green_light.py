@@ -27,7 +27,7 @@ from ..service_functions.rh2vapor_dens import rh2vapor_dens
 from ..service_functions.co2_dens2ppm import co2_dens2ppm
 
 
-def plot_green_light(gl):
+def plot_green_light(gl, filename=None):
     """
     Generate comprehensive visualization of GreenLight simulation results.
     
@@ -57,6 +57,7 @@ def plot_green_light(gl):
             - 'a': Auxiliary variables time series
             - 'u': Control inputs time series
             - 'p': Parameters (for unit conversions)
+        filename (str, optional): If provided, saves the plot to this file instead of showing it.
     
     Returns:
         matplotlib.figure.Figure: The generated figure object.
@@ -249,5 +250,11 @@ def plot_green_light(gl):
 
     plt.tight_layout()
 
-    # Show the figure
-    plt.show()
+    if filename:
+        plt.savefig(filename)
+        print(f"Plot saved to {filename}")
+        plt.close()
+        return None
+    else:
+        plt.show()
+        return None
