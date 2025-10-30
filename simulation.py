@@ -5,10 +5,9 @@ from greenlightadv_shanaka import (
     calculate_energy_consumption,
     plot_green_light,
     MQTTSimulationManager,
-    parse_gl_to_status_dict,
-    add_status_values,
+    aggregate_gl_data
 )
-from greenlightadv_shanaka.service_functions.gl_utils import aggregate_gl_data, aggregate_status_data
+
 import logging
 import matplotlib.pyplot as plt
 import json
@@ -20,8 +19,8 @@ logging.basicConfig(
 )
 
 # Set simulation parameters
-season_length =   1/24.0   # Length of growth cycle (days), can be set as a fraction
-season_interval = 1/24/2  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
+season_length =   1/24 # Length of growth cycle (days), can be set as a fraction
+season_interval = 1/24/4  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
 first_day = 91  # First day of the growth cycle (day of the year)
 
 # MQTT Configuration
@@ -162,9 +161,6 @@ try:
                              season_interval=season_interval, step=current_step)
         init_state = gl
 
-        # Track state for plotting
-        states_history.append(gl.copy() if hasattr(gl, 'copy') else gl)
-
         dmc = 0.06  # Dry matter content
         print(f'running step {current_step}')
         
@@ -191,39 +187,19 @@ try:
         #print("================================")
         #print(gl)
         #print("================================")
-
+        #wrtite gl raw directly to gl_raw.txt
+        if current_step == 0:
+            with open("gl_raw.txt", "w") as f:
+                f.write("")  # Clear file at the start
+        with open("gl_raw.txt", "a") as f:
+            f.write(f"Step {current_step}:\n")
+            f.write(gl.__str__())
+            f.write("\n")
         # Aggregate gl data
         if aggregated_gl is None:
             aggregated_gl = gl
         else:
             aggregated_gl = aggregate_gl_data(aggregated_gl, gl)
-
-        # Parse gl into a status->variable->time->value mapping (makes extracting time series easy)
-        try:
-            status = parse_gl_to_status_dict(gl)
-            if aggregated_status is None:
-                aggregated_status = status
-            else:
-                aggregated_status = aggregate_status_data(aggregated_status, status)
-
-            # Write status to file
-            #with open('gl_status.txt', 'a') as f:
-            #    f.write(f"Step: {current_step}\n")
-            #    f.write(json.dumps(aggregated_status, indent=2, default=str))
-            with open('gl_raw.txt', 'a') as f:
-                f.write(f"Step: {current_step}\n")
-                f.write(aggregated_gl.__str__())
-            
-            # Example: create a new series that is co2Air(t) + co2Air(t+1) within 'x' (if available)
-            if 'x' in status and 'co2Air' in status['x']:
-                try:
-                    add_status_values(status, 'x', 'co2Air', 'co2Air', offset_steps=1, new_var_name='co2Air_plus_next')
-                except Exception:
-                    # ignore combination errors for the example
-                    pass
-        except Exception:
-            # parsing should not break the simulation flow
-            pass
 
         # Calculate and accumulate energy consumption from lighting and heating (MJ/m2)
         lampIn += 1e-6 * calculate_energy_consumption(gl, "qLampIn", "qIntLampIn")
@@ -242,5 +218,9 @@ print(f"Lighting energy consumption: {lampIn:.2f} MJ/m2")
 print(f"Heating energy consumption: {boilIn:.2f} MJ/m2")
 print(f"Energy consumption per unit: {(lampIn + boilIn)/total_yield:.2f} MJ/kg")
 
+with open("gl_raw.txt", "a") as f:
+    f.write(f"Step aggregated:\n")
+    f.write(aggregated_gl.__str__())
+    f.write("\n")
 # Plot model results
-plot_green_light(gl, filename="sim_plot.png")
+plot_green_light(aggregated_gl, filename="sim_plot.png")
