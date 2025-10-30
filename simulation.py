@@ -1,12 +1,17 @@
 from greenlightadv_shanaka import (
     GreenLightModel,
+    GreenhouseGeometry,
     extract_last_value_from_nested_dict,
     calculate_energy_consumption,
     plot_green_light,
     MQTTSimulationManager,
+    parse_gl_to_status_dict,
+    add_status_values,
 )
+from greenlightadv_shanaka.service_functions.gl_utils import aggregate_gl_data, aggregate_status_data
 import logging
 import matplotlib.pyplot as plt
+import json
 
 # Set up logging
 logging.basicConfig(
@@ -15,8 +20,8 @@ logging.basicConfig(
 )
 
 # Set simulation parameters
-season_length = 20  # Length of growth cycle (days), can be set as a fraction
-season_interval = 1/24/4  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
+season_length =   1   # Length of growth cycle (days), can be set as a fraction
+season_interval = 1/24  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
 first_day = 91  # First day of the growth cycle (day of the year)
 
 # MQTT Configuration
@@ -27,6 +32,50 @@ greenhouse_id = "greenhouse_01"
 real_time_simulation = False  # Set to True for real-time operation
 time_step_seconds = season_interval * 24 * 3600  # Convert days to seconds
 
+roof_types = [
+    "triangle",
+    "half_circle",
+    "flat_arch",
+    "gothic_arch",
+    "sawtooth",
+    "sawtooth_arch",
+]
+
+for roof_type in roof_types:
+    print(f"Creating greenhouse with {roof_type} roof")
+    # Set basic greenhouse parameters
+    wall_height = 6.5  # Ridge height {m}
+    wall_width = 4     # Width of each roof segment {m}
+    wall_length = 1.67 # Greenhouse length {m}
+    num_segments = 6   # Number of roof segments
+    slope = 22         # Roof slope angle {°}
+    number_length = 10 # Number of greenhouses in length direction
+    number_width = 10  # Number of greenhouses in width direction
+    time_step = 60     # Time step (minutes)
+
+    # Create a GreenhouseGeometry instance
+    greenhouse_model = GreenhouseGeometry(
+        roof_type=roof_type,
+        slope=slope,
+        wall_height=wall_height,
+        wall_width=wall_width,
+        wall_length=wall_length,
+        num_segments=num_segments,
+        time_step=time_step,
+        number_width=number_width,
+        number_length=number_length,
+        max_indoor_temp=60,
+        min_indoor_temp=0,
+        max_outdoor_temp=60,
+        min_outdoor_temp=0,
+        max_delta_temp=1,
+        max_wind_speed=30,
+        start_month=4,
+        start_day=1,
+        end_month=4,
+        end_day=7,
+    )
+#greenhouse_model.create_houses()
 # Create a GreenLight model instance
 # Parameter explanation:
 # - first_day: Start date of the simulation (day of the year)
@@ -38,6 +87,10 @@ model = GreenLightModel(first_day=first_day, isMature=True, epw_path="test_data/
 total_yield = 0  # Total yield (kg/m2)
 lampIn = 0  # Lighting energy consumption (MJ/m2)
 boilIn = 0  # Heating energy consumption (MJ/m2)
+
+# Initialize aggregated data
+aggregated_gl = None
+aggregated_status = None
 
 # Initialize model state and parameters
 init_state = {
@@ -135,6 +188,42 @@ try:
 
         # Accumulate fruit yield (kg/m2)
         total_yield += current_yield
+        #print("================================")
+        #print(gl)
+        #print("================================")
+
+        # Aggregate gl data
+        if aggregated_gl is None:
+            aggregated_gl = gl
+        else:
+            aggregated_gl = aggregate_gl_data(aggregated_gl, gl)
+
+        # Parse gl into a status->variable->time->value mapping (makes extracting time series easy)
+        try:
+            status = parse_gl_to_status_dict(gl)
+            if aggregated_status is None:
+                aggregated_status = status
+            else:
+                aggregated_status = aggregate_status_data(aggregated_status, status)
+
+            # Write status to file
+            #with open('gl_status.txt', 'a') as f:
+            #    f.write(f"Step: {current_step}\n")
+            #    f.write(json.dumps(aggregated_status, indent=2, default=str))
+            with open('gl_raw.txt', 'a') as f:
+                f.write(f"Step: {current_step}\n")
+                f.write(aggregated_gl.__str__())
+            
+            # Example: create a new series that is co2Air(t) + co2Air(t+1) within 'x' (if available)
+            if 'x' in status and 'co2Air' in status['x']:
+                try:
+                    add_status_values(status, 'x', 'co2Air', 'co2Air', offset_steps=1, new_var_name='co2Air_plus_next')
+                except Exception:
+                    # ignore combination errors for the example
+                    pass
+        except Exception:
+            # parsing should not break the simulation flow
+            pass
 
         # Calculate and accumulate energy consumption from lighting and heating (MJ/m2)
         lampIn += 1e-6 * calculate_energy_consumption(gl, "qLampIn", "qIntLampIn")
@@ -155,37 +244,3 @@ print(f"Energy consumption per unit: {(lampIn + boilIn)/total_yield:.2f} MJ/kg")
 
 # Plot model results
 plot_green_light(gl, filename="sim_plot.png")
-
-# Plot tracked simulation states (example: plot a variable over time)
-def plot_simulation_history(states_history, variable='p__tAir', filename=None):
-    """
-    Plot a variable from the tracked simulation states.
-    variable: str, e.g. 'p__tAir' for air temperature in the greenhouse.
-    If filename is provided, save the plot to file instead of showing it.
-    """
-    values = []
-    for state in states_history:
-        # Support nested dicts with double underscore notation
-        keys = variable.split('__')
-        val = state
-        try:
-            for k in keys:
-                val = val[k]
-            values.append(val)
-        except Exception:
-            values.append(float('nan'))
-    plt.figure()
-    plt.plot(values)
-    plt.title(f"Simulation history: {variable}")
-    plt.xlabel("Step")
-    plt.ylabel(variable)
-    plt.grid(True)
-    if filename:
-        plt.savefig(filename)
-        print(f"Plot saved to {filename}")
-        plt.close()
-    else:
-        plt.show()
-
-# Example: plot air temperature if available, and save to file
-plot_simulation_history(states_history, variable='p__tAir', filename="simulation_p__tAir.png")

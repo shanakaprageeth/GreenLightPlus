@@ -39,3 +39,8 @@ from .result_analysis.energy_analysis import energy_analysis
 from .service_functions.funcs import calculate_energy_consumption, extract_last_value_from_nested_dict
 from .service_functions.cut_energy_plus_data import cut_energy_plus_data
 from .service_functions.convert_epw2csv import convert_epw2csv
+
+from .service_functions.gl_utils import (
+    parse_gl_to_status_dict,
+    add_status_values,
+)

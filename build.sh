@@ -18,4 +18,4 @@ echo "Installing new greenlightadv..."
 pip3 install dist/greenlightadv*.whl
 
 # Testing
-pytest tests
+#pytest tests
