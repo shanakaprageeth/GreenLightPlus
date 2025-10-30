@@ -28,8 +28,10 @@ def aggregate_gl_data(gl_previous, gl_next):
     for main_key, main_value in gl_next.items():
         if main_key is 't':
             gl_aggregated[main_key] = np.array([gl_previous['t'][0], main_value[1]])
+            continue
         if main_key is 'p':
             gl_aggregated[main_key] = main_value
+            continue
         for sub_key, sub_value in gl_next[main_key].items():
             if gl_previous[main_key].get(sub_key) is None:
                 gl_aggregated[main_key][sub_key] = sub_value
