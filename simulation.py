@@ -20,8 +20,8 @@ logging.basicConfig(
 )
 
 # Set simulation parameters
-season_length =   1   # Length of growth cycle (days), can be set as a fraction
-season_interval = 1/24  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
+season_length =   1/24.0   # Length of growth cycle (days), can be set as a fraction
+season_interval = 1/24/2  # Time interval for each model run (days), can be set as a fraction, e.g., 1/24/4 represents 15 minutes
 first_day = 91  # First day of the growth cycle (day of the year)
 
 # MQTT Configuration
