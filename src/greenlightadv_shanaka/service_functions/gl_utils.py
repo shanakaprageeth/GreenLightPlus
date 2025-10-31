@@ -21,7 +21,7 @@ def get_all_available_gl_parameters(gl_data):
             variable_names.append([sub_key, type(main_value[sub_key])])
     return variable_names
 
-def get_all_float_integer_variables_values(gl_data):
+def get_all_float_integer_variables_values(gl_data, float_precision=4):
     """
     Retrieve a list of all variable names in the GreenLight (gl) data structure
     that are of type float or integer.
@@ -32,23 +32,28 @@ def get_all_float_integer_variables_values(gl_data):
         list: A list of variable names of type float or integer with last values
     """
     parameter_value_list = []
-    if parameter_name in ['x', 'd', 'a', 'u', 'p']:
-        raise ValueError("parameter_name should be a variable name, not a main key.")
     for main_key, main_value in gl_data.items():
-        for sub_key, sub_value in main_value.items():
-            if isinstance(sub_value, dict):
-                # If the variable is nested, extract the last value from each sub-variable
-                last_values = {}
-                for sub_key, sub_value in sub_value.items():
-                    last_values[sub_key] = round(sub_value[-1, 1], float_precision)  # Assuming second column is the value
-                parameter_value_list.append([sub_key, last_values])
-                continue
-            if isinstance(sub_value, np.ndarray):
+        if isinstance(main_value, dict):
+            for sub_key, sub_value in main_value.items():
+                if isinstance(sub_value, dict):
+                    # If the variable is nested, extract the last value from each sub-variable
+                    last_values = {}
+                    for sub_key, sub_value in sub_value.items():
+                        last_values[sub_key] = round(sub_value[-1, 1], float_precision)  # Assuming second column is the value
+                    parameter_value_list.append([sub_key, last_values])
+                    continue
+                if isinstance(sub_value, np.ndarray):
+                    parameter_value_list.append([sub_key, round(sub_value[-1, 1], float_precision)])  # Assuming second column is the value
+                else:
+                    if isinstance(sub_value, (float, int)):
+                        parameter_value_list.append([sub_key, sub_value])
+        else:
+            if isinstance(sub_value, (float, int)):
+                parameter_value_list.append([sub_key, sub_value])
+            elif isinstance(sub_value, np.ndarray):
                 parameter_value_list.append([sub_key, round(sub_value[-1, 1], float_precision)])  # Assuming second column is the value
             else:
-                logger.warning(f"Unexpected data type for variable '{parameter_name}': {type(sub_value)}")
-                if isinstance(sub_value, (float, int)):
-                    parameter_value_list.append([sub_key, sub_value])
+                logger.warning(f"Unexpected main value type for key '{main_key}': {type(main_value)}")
     return parameter_value_list
 
 

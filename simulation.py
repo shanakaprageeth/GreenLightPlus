@@ -165,7 +165,7 @@ try:
 
         dmc = 0.06  # Dry matter content
         print(f'running step {current_step}')
-        
+        current_publishable_data_list = get_all_float_integer_variables_values(gl)
         # Publish MQTT data if manager is available
         if mqtt_manager:
             success = mqtt_manager.publish_simulation_data(gl, current_step)

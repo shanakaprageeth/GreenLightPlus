@@ -142,6 +142,10 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+gl_raw.txt
+window_schedule*.csv
+greenhouse_sawtooth*
+
 
 # Pyre type checker
 .pyre/
