@@ -12,7 +12,9 @@ install_dependencies(){
     cd $BASEDIR/
     sudo apt-get update
     sudo apt-get install -y python3 python3-pip python3-venv npm
-    ./dev_env_setup.sh
+    python3 -m venv .venv
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirnments.txt
     sudo npm install --unsafe-perm node-red
     sudo npm install -g --unsafe-perm node-red
     sudo npm install node-red-dashboard
@@ -43,10 +45,16 @@ nodered(){
 setup_local_server(){
     install_dependencies
     sudo apt-get install -y mosquitto mosquitto-clients git build-essential terminator screen curl net-tools
-    sudo cp $BASEDIR/mosquitto.conf /etc/mosquitto/conf.d/
-    sudo systemctl enable mosquitto
-    sudo systemctl start mosquitto
-    sudo systemctl status mosquitto
+    sudo cp /etc/mosquitto/mosquitto.conf /etc/mosquitto/mosquitto.conf.bak
+    sudo cp $BASEDIR/mosquitto.conf /etc/mosquitto/conf.d/mosquitto.conf
+    sudo systemctl enable mosquitto || true
+    sudo service mosquitto restart
+    sudo service mosquitto status
+    sudo /bin/mkdir -m 740 -p /var/log/mosquitto
+    sudo /bin/chown mosquitto:mosquitto /var/log/mosquitto
+    sudo /bin/mkdir -m 740 -p /run/mosquitto
+    sudo /bin/chown mosquitto:mosquitto /run/mosquitto
+    #sudo /usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf &
 }
 
 
