@@ -6,7 +6,81 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def get_all_available_gl_parameters(gl_data):
+    """
+    Retrieve a list of all available variable names in the GreenLight (gl) data structure.
+    
+    Args:
+        gl_data (dict): The GreenLight model dictionary after simulation.
+    Returns:
+        list: A list of variable names and type available in the gl data.
+    """
+    variable_names = []
+    for main_key, main_value in gl_data.items():
+        for sub_key in main_value.keys():
+            variable_names.append([sub_key, type(main_value[sub_key])])
+    return variable_names
 
+def get_all_float_integer_variables_values(gl_data):
+    """
+    Retrieve a list of all variable names in the GreenLight (gl) data structure
+    that are of type float or integer.
+    
+    Args:
+        gl_data (dict): The GreenLight model dictionary after simulation.
+    Returns:
+        list: A list of variable names of type float or integer with last values
+    """
+    parameter_value_list = []
+    if parameter_name in ['x', 'd', 'a', 'u', 'p']:
+        raise ValueError("parameter_name should be a variable name, not a main key.")
+    for main_key, main_value in gl_data.items():
+        for sub_key, sub_value in main_value.items():
+            if isinstance(sub_value, dict):
+                # If the variable is nested, extract the last value from each sub-variable
+                last_values = {}
+                for sub_key, sub_value in sub_value.items():
+                    last_values[sub_key] = round(sub_value[-1, 1], float_precision)  # Assuming second column is the value
+                parameter_value_list.append([sub_key, last_values])
+                continue
+            if isinstance(sub_value, np.ndarray):
+                parameter_value_list.append([sub_key, round(sub_value[-1, 1], float_precision)])  # Assuming second column is the value
+            else:
+                logger.warning(f"Unexpected data type for variable '{parameter_name}': {type(sub_value)}")
+                if isinstance(sub_value, (float, int)):
+                    parameter_value_list.append([sub_key, sub_value])
+    return parameter_value_list
+
+
+def get_gl_parameter_last_value(gl_data, parameter_name, float_precision=4):
+    """
+    Extract the last value of a specified variable from the GreenLight (gl) data structure.
+    
+    Args:
+        gl_data (dict): The GreenLight model dictionary after simulation.
+        parameter_name (str): The name of the parameter to extract.
+    """
+    if parameter_name in ['x', 'd', 'a', 'u', 'p']:
+        raise ValueError("parameter_name should be a variable name, not a main key.")
+    for main_key, main_value in gl_data.items():
+        for sub_key, sub_value in main_value.items():
+            if parameter_name == sub_key:
+                if isinstance(sub_value, dict):
+                    # If the variable is nested, extract the last value from each sub-variable
+                    last_values = {}
+                    for sub_key, sub_value in sub_value.items():
+                        last_values[sub_key] = round(sub_value[-1, 1], float_precision)  # Assuming second column is the value
+                    return last_values
+                if isinstance(sub_value, np.ndarray):
+                    return round(sub_value[-1, 1], float_precision)  # Assuming second column is the value
+                else:
+                    logger.warning(f"Unexpected data type for variable '{parameter_name}': {type(sub_value)}")
+                    return sub_value
+    raise KeyError(f"Variable '{parameter_name}' not found in gl data.")
+
+  # Assuming second column is the value
+
+    return find_last_value(gl_data, var_name)
 
 def aggregate_gl_data(gl_previous, gl_next):
     """
@@ -38,7 +112,7 @@ def aggregate_gl_data(gl_previous, gl_next):
                 logger.info(f"Key '{sub_key}' not in previous data. Added current data directly.")
                 continue
             else:
-                logger.info(f"Aggregating data for key '{sub_key} {type(sub_value)}'")
+                #logger.info(f"Aggregating data for key '{sub_key} {type(sub_value)}'")
                 if isinstance(sub_value, dict):
                     logger.info(f"Aggregating nested dictionary for key '{sub_key}'")
                     for internal_key, internal_value in gl_next[main_key][sub_key].items():

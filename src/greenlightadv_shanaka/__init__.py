@@ -41,5 +41,5 @@ from .service_functions.cut_energy_plus_data import cut_energy_plus_data
 from .service_functions.convert_epw2csv import convert_epw2csv
 
 from .service_functions.gl_utils import (
-    aggregate_gl_data,
+    aggregate_gl_data, get_gl_parameter_last_value, get_all_available_gl_parameters, get_all_float_integer_variables_values
 )

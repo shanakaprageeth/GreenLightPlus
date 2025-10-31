@@ -5,7 +5,9 @@ from greenlightadv_shanaka import (
     calculate_energy_consumption,
     plot_green_light,
     MQTTSimulationManager,
-    aggregate_gl_data
+    aggregate_gl_data,
+    get_gl_parameter_last_value,
+    get_all_float_integer_variables_values
 )
 
 import logging
@@ -181,7 +183,7 @@ try:
         # Calculate and print current yield (kg/m2)
         current_yield = 1e-6 * calculate_energy_consumption(gl, 'mcFruitHar') / dmc
         print(f"Current yield: {current_yield:.2f} kg/m2")
-
+        print(f"Current Air temperature: {get_gl_parameter_last_value(gl, 'tAir')}")
         # Accumulate fruit yield (kg/m2)
         total_yield += current_yield
         #print("================================")
